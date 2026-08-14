@@ -14,7 +14,7 @@ def test_groq_connection():
     client = Groq(api_key=api_key)
 
     # Test prompt
-    prompt = "You are Backend Guardian, an AI debugging assistant. State your status in one sentence."
+    prompt = "Briefly explain what a race condition in a booking os.system is in 2 sentences."
 
     # Send chat completion request
     chat_completion = client.chat.completions.create(

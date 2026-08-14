@@ -1,0 +1,9 @@
+{
+  "name": "ticket-booking-backend",
+  "version": "1.0.0",
+  "main": "src/app.js",
+  "dependencies": {
+    "express": "^4.19.0",
+    "pg": "^8.11.0"
+  }
+}
