@@ -1,31 +1,35 @@
 import os
-from xmlrpc import client
 from dotenv import load_dotenv
-from google import genai
+from groq import Groq
 
 # Load environment variables from .env file
 load_dotenv()
 
-def test_gemini_connection():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key or api_key == "YOUR_GEMINI_API_KEY":
-        raise ValueError("Please set a valid GEMINI_API_KEY in your .env file.")
+def test_groq_connection():
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("Please set a valid GROQ_API_KEY in your .env file.")
 
-    # Initialize the Google GenAI client
-    client = genai.Client(api_key=api_key)
+    # Initialize the Groq client
+    client = Groq(api_key=api_key)
 
-    # Send a lightweight test prompt
+    # Test prompt
     prompt = "You are Backend Guardian, an AI debugging assistant. State your status in one sentence."
-    
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
+
+    # Send chat completion request
+    chat_completion = client.chat.completions.create(
+        messages=[
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+        model="llama-3.3-70b-versatile",
     )
 
     print("\n--- LLM Response ---")
-    print(response.text)
+    print(chat_completion.choices[0].message.content)
     print("--------------------\n")
 
 if __name__ == "__main__":
-    
-    test_gemini_connection()
+    test_groq_connection()

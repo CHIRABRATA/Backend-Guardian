@@ -1,2 +1,2 @@
-google-genai
+groq
 python-dotenv
