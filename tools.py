@@ -10,12 +10,10 @@ def list_files(base_dir: str = "mock_repo") -> list[str]:
 
     file_list = []
     for root, dirs, files in os.walk(base_dir):
-        # Ignore common unnecessary directories
         dirs[:] = [d for d in dirs if d not in [".git", "node_modules", "__pycache__", "venv"]]
         
         for file in files:
             full_path = os.path.join(root, file)
-            # Make path relative and standardized with forward slashes
             rel_path = os.path.relpath(full_path, base_dir).replace("\\", "/")
             file_list.append(rel_path)
 
@@ -25,13 +23,11 @@ def list_files(base_dir: str = "mock_repo") -> list[str]:
 def read_file(file_path: str, base_dir: str = "mock_repo") -> str:
     """
     Reads the content of a specific file safely inside the base directory.
-    Prevents directory traversal attacks (e.g., ../../etc/passwd).
+    Prevents directory traversal attacks.
     """
-    # Build safe path
     target_path = os.path.abspath(os.path.join(base_dir, file_path))
     safe_base = os.path.abspath(base_dir)
 
-    # Security check: ensure target is strictly inside the base directory
     if not target_path.startswith(safe_base):
         return f"Error: Access denied. Cannot read files outside '{base_dir}'."
 
@@ -45,12 +41,38 @@ def read_file(file_path: str, base_dir: str = "mock_repo") -> str:
         return f"Error reading file: {str(e)}"
 
 
-# Self-test when running tools.py directly
-if __name__ == "__main__":
-    print("--- 1. Testing list_files() ---")
-    files = list_files("mock_repo")
-    print(files)
+def search_code(query: str, base_dir: str = "mock_repo") -> list[dict]:
+    """
+    Searches for a keyword or phrase across all files in the repository.
+    Returns matching file paths, line numbers, and line contents.
+    """
+    results = []
+    files = list_files(base_dir)
 
-    print("\n--- 2. Testing read_file() ---")
-    content = read_file("src/services/booking.service.js", "mock_repo")
-    print(content)
+    for file_path in files:
+        # Skip error messages from list_files
+        if file_path.startswith("Error:"):
+            continue
+
+        target_path = os.path.join(base_dir, file_path)
+        try:
+            with open(target_path, "r", encoding="utf-8") as f:
+                for line_number, line in enumerate(f, start=1):
+                    if query.lower() in line.lower():
+                        results.append({
+                            "file": file_path,
+                            "line": line_number,
+                            "code": line.strip()
+                        })
+        except Exception:
+            continue
+
+    return results
+
+
+# Direct test
+if __name__ == "__main__":
+    print("--- Testing search_code('seats') ---")
+    matches = search_code("seats", "mock_repo")
+    for match in matches:
+        print(f"[{match['file']}:{match['line']}] -> {match['code']}")
