@@ -3,6 +3,8 @@ import stat
 import shutil
 import subprocess
 import json
+import urllib.error
+import urllib.request
 
 def _remove_readonly(func, path, exc_info):
     """Clear the read-only bit on Windows so files can be deleted."""
@@ -138,25 +140,43 @@ def push_fix_to_github(
     repo_url: str,
     base_dir: str = "workspace_repo",
     branch_name: str = "fix/backend-guardian-patch",
-    commit_message: str = "fix: autonomous bug remediation by Backend Guardian"
+    commit_message: str = "fix: autonomous bug remediation by Backend Guardian",
+    pr_title: str = "fix: autonomous bug remediation by Backend Guardian",
+    pr_body: str = "Automated bug patch generated and verified by Backend Guardian."
 ) -> dict:
+    """Push a fix branch and open a GitHub pull request when authenticated."""
     token = os.getenv("GITHUB_TOKEN")
     cwd = os.path.abspath(base_dir)
 
     try:
+        clean_url = repo_url.strip()
+        for prefix in ("https://github.com/", "http://github.com/", "git@github.com:"):
+            if clean_url.startswith(prefix):
+                clean_url = clean_url[len(prefix):]
+                break
+        clean_url = clean_url.removesuffix(".git").strip("/")
+        parts = clean_url.split("/")
+        if len(parts) < 2:
+            return {"status": "FAILED", "message": f"Could not parse owner/repo from URL: {repo_url}"}
+        owner, repo = parts[0], parts[1]
+
         subprocess.run(["git", "config", "user.name", "Backend-Guardian-Agent"], cwd=cwd, check=True)
         subprocess.run(["git", "config", "user.email", "agent@backend-guardian.ai"], cwd=cwd, check=True)
         subprocess.run(["git", "checkout", "-B", branch_name], cwd=cwd, check=True)
         subprocess.run(["git", "add", "."], cwd=cwd, check=True)
-        subprocess.run(["git", "commit", "-m", commit_message], cwd=cwd, capture_output=True, text=True)
+        commit_res = subprocess.run(
+            ["git", "commit", "-m", commit_message],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+        )
+        if commit_res.returncode != 0 and "nothing to commit" not in (commit_res.stdout + commit_res.stderr).lower():
+            return {"status": "FAILED", "message": f"Git commit failed: {commit_res.stderr.strip()}"}
 
-        remote_url = repo_url
-        if token and repo_url.startswith("https://"):
-            clean_url = repo_url.replace("https://", "")
-            remote_url = f"https://{token}@{clean_url}"
+        auth_url = f"https://{token}@github.com/{owner}/{repo}.git" if token else repo_url
 
         push_res = subprocess.run(
-            ["git", "push", "-u", remote_url, branch_name, "--force"],
+            ["git", "push", "-u", auth_url, branch_name, "--force"],
             cwd=cwd,
             capture_output=True,
             text=True,
@@ -164,12 +184,32 @@ def push_fix_to_github(
         )
 
         if push_res.returncode == 0:
-            return {
-                "status": "SUCCESS",
-                "branch": branch_name,
-                "message": f"Successfully pushed patch to branch '{branch_name}' on GitHub."
-            }
-        else:
-            return {"status": "FAILED", "message": f"Git push failed: {push_res.stderr.strip()}"}
+            if not token:
+                return {"status": "SUCCESS", "branch": branch_name, "message": f"Branch '{branch_name}' pushed, but no GITHUB_TOKEN was provided to open a PR."}
+
+            api_url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+            payload = json.dumps({"title": pr_title, "body": pr_body, "head": branch_name, "base": "main"}).encode("utf-8")
+            request = urllib.request.Request(
+                api_url,
+                data=payload,
+                headers={
+                    "Authorization": f"token {token}",
+                    "Accept": "application/vnd.github.v3+json",
+                    "User-Agent": "Backend-Guardian",
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    data = json.loads(response.read().decode())
+                pr_url = data.get("html_url", "")
+                return {"status": "SUCCESS", "branch": branch_name, "pr_url": pr_url, "message": f"Pull Request opened: {pr_url}"}
+            except urllib.error.HTTPError as error:
+                error_body = error.read().decode()
+                if "A pull request already exists" in error_body:
+                    return {"status": "SUCCESS", "branch": branch_name, "message": f"Branch updated on GitHub (PR already open for '{branch_name}')."}
+                return {"status": "WARNING", "branch": branch_name, "message": f"Pushed branch successfully, but failed to open PR: {error_body}"}
+
+        return {"status": "FAILED", "message": f"Git push failed: {push_res.stderr.strip()}"}
     except Exception as e:
         return {"status": "FAILED", "message": f"Error executing git push: {str(e)}"}

@@ -128,7 +128,9 @@ def api_approve(req: ApprovalRequest):
             repo_url=repo_url,
             base_dir=workspace,
             branch_name=f"fix/guardian-{req.session_id}",
-            commit_message=f"fix: {state['root_cause'][:60]}"
+            commit_message=f"fix: {state['root_cause'][:60]}",
+            pr_title=f"Fix: {state['root_cause'][:60]}",
+            pr_body=f"### Root Cause\n{state['root_cause']}\n\n### Proposed Strategy\n{state.get('proposed_fix', '')}",
         )
 
     # 4. Save to persistent memory
