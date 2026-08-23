@@ -288,32 +288,57 @@ def human_approval_node(state: AgentState) -> dict:
         print("\n❌ Fix Rejected by Human. Aborting repository modification.")
         return {"approval_status": "REJECTED"}
 
-# --- 7. Node 4: Apply Code Fix ---
+# --- 7. Node 4: Dynamic Code Fix Generator ---
 def apply_code_fix_node(state: AgentState) -> dict:
-    print(f"\n🔨 [4. Code Agent Node] Applying patch (Attempt {state.get('retry_count', 0) + 1})...")
+    print(f"\n🔨 [4. Code Agent Node] Applying patch dynamically (Attempt {state.get('retry_count', 0) + 1})...")
 
-    target_file = state["affected_files"][0] if state["affected_files"] else "src/services/booking.service.js"
-    
-    fixed_code = """// Fixed booking service with atomic concurrency protection
-async function bookSeat(showId, seatNumber, userId) {
-    const result = await db.query(
-        "UPDATE seats SET is_booked = true, user_id = $3 WHERE show_id = $1 AND seat_number = $2 AND is_booked = false",
-        [showId, seatNumber, userId]
-    );
+    target_file = state["affected_files"][0] if state["affected_files"] else "main.py"
+    current_content = read_file(target_file, base_dir=state["workspace_dir"])
+    if current_content.startswith("Error:"):
+        print(f"❌ Could not read target file: {current_content}")
+        return {"patch_applied": False}
 
-    if (!result || (result.rowCount === 0 && result.affectedRows === 0)) {
-        throw new Error("Seat already booked");
-    }
+    client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    patch_prompt = f"""
+You are an autonomous senior software patch engineer.
+Apply the proposed fix directly to the target file.
 
-    return { success: true };
-}
+Target File Path: {target_file}
 
-module.exports = { bookSeat };
+Proposed Fix Strategy:
+{state['proposed_fix']}
+
+Current File Content:
+```
+{current_content}
+```
+
+Instructions:
+1. Rewrite the complete source file with the bug resolved.
+2. Maintain identical formatting, imports, and style.
+3. Do NOT mix programming languages. Output valid source for the target file.
+4. Output ONLY the raw replacement code without explanations, markdown backticks, or intro text.
 """
-    result = write_file(target_file, fixed_code, base_dir=state["workspace_dir"])
-    print(f"  💾 {result}")
 
-    return {"patch_applied": True}
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": "You are a code patching bot. Output raw source code only."},
+            {"role": "user", "content": patch_prompt},
+        ],
+        temperature=0.0,
+    )
+
+    raw_code = response.choices[0].message.content or ""
+    cleaned_code = re.sub(r"^```[a-zA-Z0-9_+-]*\s*\n", "", raw_code.strip())
+    cleaned_code = re.sub(r"\n```$", "", cleaned_code).strip()
+    if not cleaned_code:
+        print("❌ Model returned an empty patch.")
+        return {"patch_applied": False}
+
+    result = write_file(target_file, cleaned_code, base_dir=state["workspace_dir"])
+    print(f"  💾 {result}")
+    return {"patch_applied": result.startswith("Success:")}
 
 # --- 8. Node 5: Test Execution Agent ---
 def run_tests_node(state: AgentState) -> dict:

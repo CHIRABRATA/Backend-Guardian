@@ -1,13 +1,8 @@
 import os
-import json
-import subprocess
-import shutil
-import os
 import stat
 import shutil
 import subprocess
-import urllib.error
-import urllib.request
+import json
 
 def _remove_readonly(func, path, exc_info):
     """Clear the read-only bit on Windows so files can be deleted."""
@@ -15,21 +10,13 @@ def _remove_readonly(func, path, exc_info):
     func(path)
 
 def clone_github_repo(repo_url: str, target_dir: str = "workspace_repo") -> dict:
-    """
-    Clones a remote GitHub repository into an isolated local workspace folder.
-    Cleans up any existing folder first, handling Windows permission locks.
-    """
     safe_target = os.path.abspath(target_dir)
 
-    # Force delete existing directory if present
     if os.path.exists(safe_target):
         try:
             shutil.rmtree(safe_target, onerror=_remove_readonly)
         except Exception as e:
-            return {
-                "status": "FAILED",
-                "message": f"Could not clear existing workspace folder: {str(e)}"
-            }
+            return {"status": "FAILED", "message": f"Could not clear directory: {str(e)}"}
 
     try:
         result = subprocess.run(
@@ -39,95 +26,12 @@ def clone_github_repo(repo_url: str, target_dir: str = "workspace_repo") -> dict
             timeout=30
         )
         if result.returncode == 0:
-            return {
-                "status": "SUCCESS",
-                "workspace_path": target_dir,
-                "message": f"Successfully cloned {repo_url} into {target_dir}"
-            }
+            return {"status": "SUCCESS", "workspace_path": target_dir}
         else:
-            return {
-                "status": "FAILED",
-                "message": f"Git clone failed: {result.stderr.strip()}"
-            }
+            return {"status": "FAILED", "message": f"Git clone failed: {result.stderr.strip()}"}
     except Exception as e:
         return {"status": "FAILED", "message": f"Error running git clone: {str(e)}"}
 
-
-def create_pull_request(
-    repo_name: str,
-    branch_name: str,
-    title: str,
-    body: str,
-    workspace_dir: str = "workspace_repo",
-) -> dict:
-    """Push local changes to a branch and open a GitHub pull request."""
-    token = os.getenv("GITHUB_TOKEN")
-    if not token:
-        return {"status": "SKIPPED", "message": "No GITHUB_TOKEN provided."}
-
-    if not repo_name or repo_name.count("/") != 1:
-        return {"status": "FAILED", "message": "repo_name must use the 'owner/repository' format."}
-    if not branch_name.strip() or branch_name in {"main", "master"}:
-        return {"status": "FAILED", "message": "A non-default branch name is required."}
-
-    workspace = os.path.abspath(workspace_dir)
-    if not os.path.isdir(os.path.join(workspace, ".git")):
-        return {"status": "FAILED", "message": f"Git workspace not found: {workspace_dir}"}
-
-    def run_git(*args: str, capture_output: bool = False) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            ["git", *args],
-            cwd=workspace,
-            capture_output=capture_output,
-            text=True,
-            timeout=30,
-        )
-
-    try:
-        branch_result = run_git("checkout", "-b", branch_name, capture_output=True)
-        if branch_result.returncode != 0:
-            return {"status": "FAILED", "message": branch_result.stderr.strip()}
-
-        add_result = run_git("add", ".", capture_output=True)
-        if add_result.returncode != 0:
-            return {"status": "FAILED", "message": add_result.stderr.strip()}
-
-        commit_result = run_git("commit", "-m", title, capture_output=True)
-        if commit_result.returncode != 0:
-            return {"status": "FAILED", "message": commit_result.stderr.strip()}
-
-        auth_header = f"AUTHORIZATION: bearer {token}"
-        push_result = run_git(
-            "-c", f"http.extraheader={auth_header}",
-            "push", "origin", branch_name,
-            capture_output=True,
-        )
-        if push_result.returncode != 0:
-            return {"status": "FAILED", "message": push_result.stderr.strip()}
-
-        request = urllib.request.Request(
-            f"https://api.github.com/repos/{repo_name}/pulls",
-            data=json.dumps({"title": title, "head": branch_name, "base": "main", "body": body}).encode(),
-            headers={
-                "Accept": "application/vnd.github+json",
-                "Authorization": f"Bearer {token}",
-                "User-Agent": "Backend-Guardian",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            pull_request = json.loads(response.read().decode())
-
-        return {
-            "status": "SUCCESS",
-            "message": "Pull request created successfully.",
-            "url": pull_request.get("html_url"),
-            "number": pull_request.get("number"),
-        }
-    except (OSError, subprocess.SubprocessError, urllib.error.HTTPError) as exc:
-        return {"status": "FAILED", "message": str(exc)}
-    
 def list_files(base_dir: str = "mock_repo") -> list[str]:
     if not os.path.exists(base_dir):
         return [f"Error: Directory '{base_dir}' does not exist."]
@@ -141,13 +45,12 @@ def list_files(base_dir: str = "mock_repo") -> list[str]:
             file_list.append(rel_path)
     return sorted(file_list)
 
-
 def read_file(file_path: str, base_dir: str = "mock_repo") -> str:
     target_path = os.path.abspath(os.path.join(base_dir, file_path))
     safe_base = os.path.abspath(base_dir)
 
     if not target_path.startswith(safe_base):
-        return f"Error: Access denied. Cannot read files outside '{base_dir}'."
+        return f"Error: Access denied outside '{base_dir}'."
 
     if not os.path.exists(target_path):
         return f"Error: File '{file_path}' not found."
@@ -157,7 +60,6 @@ def read_file(file_path: str, base_dir: str = "mock_repo") -> str:
             return f.read()
     except Exception as e:
         return f"Error reading file: {str(e)}"
-
 
 def search_code(query: str, base_dir: str = "mock_repo") -> list[dict]:
     results = []
@@ -179,13 +81,12 @@ def search_code(query: str, base_dir: str = "mock_repo") -> list[dict]:
             continue
     return results
 
-
 def write_file(file_path: str, content: str, base_dir: str = "mock_repo") -> str:
     target_path = os.path.abspath(os.path.join(base_dir, file_path))
     safe_base = os.path.abspath(base_dir)
 
     if not target_path.startswith(safe_base):
-        return f"Error: Access denied. Cannot write files outside '{base_dir}'."
+        return f"Error: Access denied outside '{base_dir}'."
 
     try:
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
@@ -194,7 +95,6 @@ def write_file(file_path: str, content: str, base_dir: str = "mock_repo") -> str
         return f"Success: File '{file_path}' updated successfully."
     except Exception as e:
         return f"Error writing file: {str(e)}"
-
 
 def run_tests(test_file: str = "tests/booking.test.js", base_dir: str = "mock_repo") -> dict:
     target_path = os.path.abspath(os.path.join(base_dir, test_file))
@@ -209,7 +109,7 @@ def run_tests(test_file: str = "tests/booking.test.js", base_dir: str = "mock_re
                     package = json.load(package_file)
                 if package.get("scripts", {}).get("test"):
                     command = ["npm", "test"]
-            except (OSError, json.JSONDecodeError):
+            except Exception:
                 pass
 
     if command is None:
@@ -233,3 +133,43 @@ def run_tests(test_file: str = "tests/booking.test.js", base_dir: str = "mock_re
         }
     except Exception as e:
         return {"status": "FAILED", "output": f"Execution error: {str(e)}"}
+
+def push_fix_to_github(
+    repo_url: str,
+    base_dir: str = "workspace_repo",
+    branch_name: str = "fix/backend-guardian-patch",
+    commit_message: str = "fix: autonomous bug remediation by Backend Guardian"
+) -> dict:
+    token = os.getenv("GITHUB_TOKEN")
+    cwd = os.path.abspath(base_dir)
+
+    try:
+        subprocess.run(["git", "config", "user.name", "Backend-Guardian-Agent"], cwd=cwd, check=True)
+        subprocess.run(["git", "config", "user.email", "agent@backend-guardian.ai"], cwd=cwd, check=True)
+        subprocess.run(["git", "checkout", "-B", branch_name], cwd=cwd, check=True)
+        subprocess.run(["git", "add", "."], cwd=cwd, check=True)
+        subprocess.run(["git", "commit", "-m", commit_message], cwd=cwd, capture_output=True, text=True)
+
+        remote_url = repo_url
+        if token and repo_url.startswith("https://"):
+            clean_url = repo_url.replace("https://", "")
+            remote_url = f"https://{token}@{clean_url}"
+
+        push_res = subprocess.run(
+            ["git", "push", "-u", remote_url, branch_name, "--force"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if push_res.returncode == 0:
+            return {
+                "status": "SUCCESS",
+                "branch": branch_name,
+                "message": f"Successfully pushed patch to branch '{branch_name}' on GitHub."
+            }
+        else:
+            return {"status": "FAILED", "message": f"Git push failed: {push_res.stderr.strip()}"}
+    except Exception as e:
+        return {"status": "FAILED", "message": f"Error executing git push: {str(e)}"}
