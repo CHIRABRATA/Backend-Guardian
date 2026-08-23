@@ -6,6 +6,8 @@ import os
 import stat
 import shutil
 import subprocess
+import urllib.error
+import urllib.request
 
 def _remove_readonly(func, path, exc_info):
     """Clear the read-only bit on Windows so files can be deleted."""
@@ -49,6 +51,82 @@ def clone_github_repo(repo_url: str, target_dir: str = "workspace_repo") -> dict
             }
     except Exception as e:
         return {"status": "FAILED", "message": f"Error running git clone: {str(e)}"}
+
+
+def create_pull_request(
+    repo_name: str,
+    branch_name: str,
+    title: str,
+    body: str,
+    workspace_dir: str = "workspace_repo",
+) -> dict:
+    """Push local changes to a branch and open a GitHub pull request."""
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        return {"status": "SKIPPED", "message": "No GITHUB_TOKEN provided."}
+
+    if not repo_name or repo_name.count("/") != 1:
+        return {"status": "FAILED", "message": "repo_name must use the 'owner/repository' format."}
+    if not branch_name.strip() or branch_name in {"main", "master"}:
+        return {"status": "FAILED", "message": "A non-default branch name is required."}
+
+    workspace = os.path.abspath(workspace_dir)
+    if not os.path.isdir(os.path.join(workspace, ".git")):
+        return {"status": "FAILED", "message": f"Git workspace not found: {workspace_dir}"}
+
+    def run_git(*args: str, capture_output: bool = False) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["git", *args],
+            cwd=workspace,
+            capture_output=capture_output,
+            text=True,
+            timeout=30,
+        )
+
+    try:
+        branch_result = run_git("checkout", "-b", branch_name, capture_output=True)
+        if branch_result.returncode != 0:
+            return {"status": "FAILED", "message": branch_result.stderr.strip()}
+
+        add_result = run_git("add", ".", capture_output=True)
+        if add_result.returncode != 0:
+            return {"status": "FAILED", "message": add_result.stderr.strip()}
+
+        commit_result = run_git("commit", "-m", title, capture_output=True)
+        if commit_result.returncode != 0:
+            return {"status": "FAILED", "message": commit_result.stderr.strip()}
+
+        auth_header = f"AUTHORIZATION: bearer {token}"
+        push_result = run_git(
+            "-c", f"http.extraheader={auth_header}",
+            "push", "origin", branch_name,
+            capture_output=True,
+        )
+        if push_result.returncode != 0:
+            return {"status": "FAILED", "message": push_result.stderr.strip()}
+
+        request = urllib.request.Request(
+            f"https://api.github.com/repos/{repo_name}/pulls",
+            data=json.dumps({"title": title, "head": branch_name, "base": "main", "body": body}).encode(),
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {token}",
+                "User-Agent": "Backend-Guardian",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            pull_request = json.loads(response.read().decode())
+
+        return {
+            "status": "SUCCESS",
+            "message": "Pull request created successfully.",
+            "url": pull_request.get("html_url"),
+            "number": pull_request.get("number"),
+        }
+    except (OSError, subprocess.SubprocessError, urllib.error.HTTPError) as exc:
+        return {"status": "FAILED", "message": str(exc)}
     
 def list_files(base_dir: str = "mock_repo") -> list[str]:
     if not os.path.exists(base_dir):
