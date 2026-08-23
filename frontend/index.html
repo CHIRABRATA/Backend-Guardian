@@ -119,17 +119,18 @@
                 <form onSubmit={handleInvestigate} className="space-y-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1">
-                      GitHub Repo URL (Optional)
+                      GitHub Repo URL <span className="text-red-400">*</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="https://github.com/owner/repo.git"
+                      required
+                      placeholder="https://github.com/owner/repo.git (or type 'local')"
                       value={repoUrl}
                       onChange={(e) => setRepoUrl(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                     />
                     <span className="text-[11px] text-slate-500">
-                      Leave blank to inspect local test repository.
+                      Enter a public GitHub repository link or type <code>local</code> for the mock repo.
                     </span>
                   </div>
 
@@ -318,25 +319,33 @@
                         className={`p-4 rounded-xl border flex items-center justify-between ${
                           testResult.test_status === "PASSED"
                             ? "bg-emerald-950/40 border-emerald-800 text-emerald-300"
+                            : testResult.test_status === "SKIPPED"
+                            ? "bg-slate-900 border-slate-700 text-slate-300"
                             : "bg-red-950/40 border-red-800 text-red-300"
                         }`}
                       >
                         <div className="flex items-center gap-2.5">
                           <span className="text-xl">
-                            {testResult.test_status === "PASSED" ? "✅" : "❌"}
+                            {testResult.test_status === "PASSED"
+                              ? "✅"
+                              : testResult.test_status === "SKIPPED"
+                              ? "ℹ️"
+                              : "❌"}
                           </span>
                           <div>
                             <h4 className="text-sm font-bold">
-                              Automated Verification {testResult.test_status}
+                              Automated Verification: {testResult.test_status}
                             </h4>
                             <p className="text-xs opacity-80">
                               {testResult.test_status === "PASSED"
-                                ? "Concurrency simulation passed. Patch indexed to memory DB."
+                                ? "All tests passed. Patch indexed to memory DB."
+                                : testResult.test_status === "SKIPPED"
+                                ? "No automated test suite detected in repo. Code patch applied directly."
                                 : "Tests failed under load."}
                             </p>
                           </div>
                         </div>
-                        <span className="text-xs font-mono font-bold uppercase px-2.5 py-1 bg-slate-950/60 rounded">
+                        <span className="text-xs font-mono font-bold uppercase px-2.5 py-1 bg-slate-950/60 rounded border border-slate-800">
                           {testResult.status}
                         </span>
                       </div>
@@ -344,7 +353,7 @@
                       {testResult.test_output && (
                         <div>
                           <span className="text-xs font-mono text-slate-500 block mb-1">
-                            Test Console Log:
+                            Execution Details:
                           </span>
                           <pre className="text-xs font-mono bg-slate-950 p-3.5 rounded-lg border border-slate-800 text-slate-400 whitespace-pre-wrap">
                             {testResult.test_output}

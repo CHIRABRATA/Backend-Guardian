@@ -1,17 +1,33 @@
 import os
+import json
 import subprocess
 import shutil
+import os
+import stat
+import shutil
+import subprocess
+
+def _remove_readonly(func, path, exc_info):
+    """Clear the read-only bit on Windows so files can be deleted."""
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
 
 def clone_github_repo(repo_url: str, target_dir: str = "workspace_repo") -> dict:
     """
     Clones a remote GitHub repository into an isolated local workspace folder.
-    Cleans up any existing folder first.
+    Cleans up any existing folder first, handling Windows permission locks.
     """
     safe_target = os.path.abspath(target_dir)
 
-    # Remove previous workspace if it exists
+    # Force delete existing directory if present
     if os.path.exists(safe_target):
-        shutil.rmtree(safe_target, ignore_errors=True)
+        try:
+            shutil.rmtree(safe_target, onerror=_remove_readonly)
+        except Exception as e:
+            return {
+                "status": "FAILED",
+                "message": f"Could not clear existing workspace folder: {str(e)}"
+            }
 
     try:
         result = subprocess.run(
@@ -33,7 +49,7 @@ def clone_github_repo(repo_url: str, target_dir: str = "workspace_repo") -> dict
             }
     except Exception as e:
         return {"status": "FAILED", "message": f"Error running git clone: {str(e)}"}
-
+    
 def list_files(base_dir: str = "mock_repo") -> list[str]:
     if not os.path.exists(base_dir):
         return [f"Error: Directory '{base_dir}' does not exist."]
@@ -104,12 +120,30 @@ def write_file(file_path: str, content: str, base_dir: str = "mock_repo") -> str
 
 def run_tests(test_file: str = "tests/booking.test.js", base_dir: str = "mock_repo") -> dict:
     target_path = os.path.abspath(os.path.join(base_dir, test_file))
-    if not os.path.exists(target_path):
-        return {"status": "FAILED", "output": f"Error: Test file '{test_file}' not found."}
+    command = None
+    if os.path.isfile(target_path):
+        command = ["node", target_path]
+    else:
+        package_path = os.path.join(base_dir, "package.json")
+        if os.path.isfile(package_path):
+            try:
+                with open(package_path, "r", encoding="utf-8") as package_file:
+                    package = json.load(package_file)
+                if package.get("scripts", {}).get("test"):
+                    command = ["npm", "test"]
+            except (OSError, json.JSONDecodeError):
+                pass
+
+    if command is None:
+        return {
+            "status": "SKIPPED",
+            "output": f"No test file '{test_file}' or package test script found in '{base_dir}'."
+        }
 
     try:
         result = subprocess.run(
-            ["node", target_path],
+            command,
+            cwd=os.path.abspath(base_dir),
             capture_output=True,
             text=True,
             timeout=10

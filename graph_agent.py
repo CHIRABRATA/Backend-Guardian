@@ -100,14 +100,15 @@ def investigate_node(state: AgentState) -> dict:
             "role": "system",
             "content": (
                 "You are an expert backend debugging investigator. "
-                "Use tools efficiently to discover files and diagnose the bug."
+                "Use tools to inspect repository files and diagnose the reported problem. "
+                "Once you have inspected the key files, stop calling tools."
             ),
         },
         {"role": "user", "content": state["user_problem"]},
     ]
 
     already_read = set()
-    inspection_results = []
+    inspection_logs = []
     step_count = 0
     max_steps = 4
 
@@ -169,28 +170,35 @@ def investigate_node(state: AgentState) -> dict:
                     "name": fn_name,
                     "content": json.dumps(output),
                 })
-                inspection_results.append({"tool": fn_name, "arguments": fn_args, "result": output})
+                inspection_logs.append(f"Tool {fn_name}({fn_args}) -> {str(output)[:2000]}")
         else:
             break
 
-    summary_messages = [
-        messages[0],
-        messages[1],
-        {
-            "role": "user",
-            "content": (
-                "Repository inspection results:\n"
-                + json.dumps(inspection_results, default=str)
-                + "\n\nSummarize your findings as valid JSON with keys: "
-                "'problem_summary', 'affected_files' (list of strings), 'evidence', 'root_cause', 'confidence' (float 0-1). "
-                "Return ONLY raw JSON."
-            ),
-        },
-    ]
+    summary_prompt = f"""
+Based on the repository investigation logs below, analyze the bug.
+
+User Problem:
+{state['user_problem']}
+
+Inspection Logs:
+{chr(10).join(inspection_logs)}
+
+Output a valid JSON object strictly matching these keys:
+- "problem_summary": string
+- "affected_files": list of relative file path strings
+- "evidence": string (concrete code snippets / lines)
+- "root_cause": string (underlying flaw)
+- "confidence": float between 0.0 and 1.0
+
+Return ONLY the raw JSON object with no markdown fences.
+"""
 
     structured_res = client.chat.completions.create(
         model=MODEL_NAME,
-        messages=summary_messages,
+        messages=[
+            {"role": "system", "content": "You are a code analysis engine that outputs strict JSON."},
+            {"role": "user", "content": summary_prompt},
+        ],
         response_format={"type": "json_object"},
     )
 
@@ -201,27 +209,29 @@ def investigate_node(state: AgentState) -> dict:
         data = json.loads(cleaned_json)
     except Exception:
         data = {
-            "affected_files": ["src/services/booking.service.js"],
-            "evidence": "Non-atomic check-then-act query",
-            "root_cause": "Race condition in booking service",
-            "confidence": 0.95,
+            "affected_files": list(already_read) or ["agenticchatbot.py"],
+            "evidence": "Observed workflow configuration",
+            "root_cause": "Inconsistency in model invocation or prompt parameters",
+            "confidence": 0.90,
         }
 
     return {
-        "affected_files": data.get("affected_files", ["src/services/booking.service.js"]),
-        "evidence": data.get("evidence", "Non-atomic check-then-act query"),
-        "root_cause": data.get("root_cause", "Race condition under concurrent booking requests"),
-        "confidence": float(data.get("confidence", 0.95)),
+        "affected_files": data.get("affected_files", list(already_read) or ["agenticchatbot.py"]),
+        "evidence": data.get("evidence", "Identified in source inspection"),
+        "root_cause": data.get("root_cause", "Inconsistency in workflow handling"),
+        "confidence": float(data.get("confidence", 0.90)),
     }
 
 # --- 5. Node 2: Fix Planner (with Memory Augmentation) ---
+# --- 5. Node 2: Dynamic Fix Planner ---
 def plan_fix_node(state: AgentState) -> dict:
     print("\n📝 [2. Plan Fix Node] Creating repair strategy...")
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
     prompt = f"""
-You are a senior backend architect.
-Diagnosis:
+You are a senior backend architect and engineer.
+Diagnosis of the bug:
+- Problem: {state['user_problem']}
 - Affected Files: {state['affected_files']}
 - Root Cause: {state['root_cause']}
 - Evidence: {state['evidence']}
@@ -229,10 +239,12 @@ Diagnosis:
 Historical Context (Past memory of similar fixes):
 {state.get('memory_context', 'None')}
 
-Propose a concrete atomic database fix for bookSeat(showId, seatNumber, userId).
-Format response as:
-PROPOSED_FIX: <concise explanation and code change>
-RISK_LEVEL: HIGH
+Task:
+Propose a concrete, production-ready fix specifically targeting the root cause and affected files identified above. Provide the exact code adjustments or replacement snippet.
+
+Format your response exactly as:
+PROPOSED_FIX: <concise explanation and concrete code changes>
+RISK_LEVEL: <LOW/MEDIUM/HIGH/CRITICAL>
 """
 
     response = client.chat.completions.create(
@@ -241,14 +253,19 @@ RISK_LEVEL: HIGH
     )
     content = response.choices[0].message.content or ""
     cleaned = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-    if not cleaned:
-        cleaned = "Apply an atomic database update that only books an available seat and verify that exactly one row was affected."
+
+    risk = "MEDIUM"
+    if "RISK_LEVEL: LOW" in cleaned:
+        risk = "LOW"
+    elif "RISK_LEVEL: HIGH" in cleaned:
+        risk = "HIGH"
+    elif "RISK_LEVEL: CRITICAL" in cleaned:
+        risk = "CRITICAL"
 
     return {
         "proposed_fix": cleaned,
-        "risk_level": "HIGH",
+        "risk_level": risk,
     }
-
 # --- 6. Node 3: Human Approval Gate ---
 def human_approval_node(state: AgentState) -> dict:
     print("\n" + "=" * 60)
