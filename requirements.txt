@@ -1,2 +1,5 @@
 groq
 python-dotenv
+pydantic
+langgraph
+langchain-core
