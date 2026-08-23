@@ -110,7 +110,7 @@ def run_agent(user_problem: str):
     # Step A: Autonomous Investigation Loop
     while True:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="qwen/qwen3.6-27b",
             messages=messages,
             tools=tools_schema,
             tool_choice="auto",
@@ -181,7 +181,7 @@ def run_agent(user_problem: str):
     })
 
     structured_response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="qwen/qwen3.6-27b",
         messages=messages,
         response_format={"type": "json_object"},
     )
