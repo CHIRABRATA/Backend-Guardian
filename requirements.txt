@@ -3,3 +3,5 @@ python-dotenv
 pydantic
 langgraph
 langchain-core
+fastapi
+uvicorn

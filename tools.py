@@ -1,5 +1,38 @@
 import os
 import subprocess
+import shutil
+
+def clone_github_repo(repo_url: str, target_dir: str = "workspace_repo") -> dict:
+    """
+    Clones a remote GitHub repository into an isolated local workspace folder.
+    Cleans up any existing folder first.
+    """
+    safe_target = os.path.abspath(target_dir)
+
+    # Remove previous workspace if it exists
+    if os.path.exists(safe_target):
+        shutil.rmtree(safe_target, ignore_errors=True)
+
+    try:
+        result = subprocess.run(
+            ["git", "clone", "--depth", "1", repo_url, safe_target],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode == 0:
+            return {
+                "status": "SUCCESS",
+                "workspace_path": target_dir,
+                "message": f"Successfully cloned {repo_url} into {target_dir}"
+            }
+        else:
+            return {
+                "status": "FAILED",
+                "message": f"Git clone failed: {result.stderr.strip()}"
+            }
+    except Exception as e:
+        return {"status": "FAILED", "message": f"Error running git clone: {str(e)}"}
 
 def list_files(base_dir: str = "mock_repo") -> list[str]:
     if not os.path.exists(base_dir):
