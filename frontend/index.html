@@ -1,376 +1,763 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Backend Guardian — Agentic Debugging Assistant</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React & ReactDOM CDN -->
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <!-- Babel Standalone for JSX -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Backend Guardian — Case File</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #0c0e11;
+    --surface: #14171c;
+    --surface-2: #1a1e25;
+    --line: #262b33;
+    --line-soft: #1c2129;
+    --ink: #e7e9ec;
+    --ink-dim: #8b93a1;
+    --ink-faint: #565d68;
+    --amber: #d98e3f;
+    --amber-soft: rgba(217, 142, 63, 0.14);
+    --red: #d6534a;
+    --red-soft: rgba(214, 83, 74, 0.14);
+    --teal: #3aab97;
+    --teal-soft: rgba(58, 171, 151, 0.14);
+    --font-display: "Fraunces", serif;
+    --font-body: "Inter", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+  }
+
+  body {
+    background-image:
+      radial-gradient(ellipse 900px 500px at 10% -10%, rgba(217, 142, 63, 0.05), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 110%, rgba(58, 171, 151, 0.04), transparent 60%);
+  }
+
+  ::selection { background: rgba(217, 142, 63, 0.3); color: #fff; }
+
+  :focus-visible {
+    outline: 2px solid var(--amber);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+
+  /* ---------- Header ---------- */
+
+  .header {
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .seal {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .brand-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    font-size: 21px;
+    color: #fff;
+  }
+
+  .brand-sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .case-no {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-dim);
+    letter-spacing: 0.03em;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 4px 9px;
+  }
+
+  .radar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    position: relative;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+
+  .radar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: conic-gradient(from 0deg, transparent 0deg, rgba(58, 171, 151, 0.9) 18deg, transparent 45deg);
+    animation: radarSpin 2.4s linear infinite;
+  }
+
+  .radar::after {
+    content: "";
+    position: absolute;
+    inset: 5px;
+    border-radius: 50%;
+    background: var(--bg);
+  }
+
+  @keyframes radarSpin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* ---------- Panels ---------- */
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: 6px;
+  }
+
+  .panel-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink-faint);
+  }
+
+  /* ---------- Form ---------- */
+
+  .field-label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-dim);
+  }
+
+  .field-input, .field-textarea {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 13.5px;
+    padding: 8px 2px;
+    resize: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .field-input:focus, .field-textarea:focus {
+    outline: none;
+    border-bottom-color: var(--amber);
+  }
+
+  .field-hint {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--ink-faint);
+  }
+
+  .btn-run {
+    width: 100%;
+    background: var(--amber);
+    color: #1a1206;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 12px 16px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-run:hover:not(:disabled) { background: #eba455; }
+  .btn-run:active:not(:disabled) { transform: scale(0.98); }
+  .btn-run:disabled { background: var(--surface-2); color: var(--ink-faint); cursor: not-allowed; }
+
+  .spinner {
+    width: 13px;
+    height: 13px;
+    border: 2px solid rgba(0,0,0,0.2);
+    border-top-color: #1a1206;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  .spinner-light {
+    border: 2px solid var(--line);
+    border-top-color: var(--amber);
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- Memory ledger (sidebar history) ---------- */
+
+  .history-card {
+    background: var(--surface-2);
+    border: 1px solid var(--line-soft);
+    border-radius: 5px;
+    padding: 9px 11px;
+  }
+
+  .history-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ---------- Empty state ---------- */
+
+  .empty-folder {
+    width: 56px;
+    height: 44px;
+    margin: 0 auto 16px;
+    opacity: 0.5;
+  }
+
+  /* ---------- Case log (loading ledger) ---------- */
+
+  .ledger-item {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    display: flex;
+    gap: 12px;
+    padding: 7px 0;
+    opacity: 0;
+    animation: ledgerFade 0.4s ease forwards;
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .ledger-item:last-child { border-bottom: none; }
+
+  .ledger-time {
+    color: var(--ink-faint);
+    flex-shrink: 0;
+    width: 46px;
+  }
+
+  @keyframes ledgerFade {
+    from { opacity: 0; transform: translateY(3px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---------- Stamp ---------- */
+
+  .stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border: 2px solid currentColor;
+    border-radius: 3px;
+    transform: rotate(-2deg);
+    animation: stampIn 0.35s cubic-bezier(.2,1.4,.4,1);
+    position: relative;
+  }
+
+  .stamp::before {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    border: 1px dashed currentColor;
+    border-radius: 2px;
+    opacity: 0.5;
+  }
+
+  @keyframes stampIn {
+    from { opacity: 0; transform: rotate(-2deg) scale(1.4); }
+    to { opacity: 1; transform: rotate(-2deg) scale(1); }
+  }
+
+  .stamp--red { color: var(--red); background: var(--red-soft); }
+  .stamp--amber { color: var(--amber); background: var(--amber-soft); }
+  .stamp--teal { color: var(--teal); background: var(--teal-soft); }
+
+  /* ---------- Exhibits ---------- */
+
+  .exhibit {
+    background: var(--surface-2);
+    border: 1px solid var(--line-soft);
+    border-radius: 5px;
+    padding: 12px 14px;
+  }
+
+  .exhibit-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-faint);
+    display: block;
+    margin-bottom: 5px;
+  }
+
+  /* ---------- Confidence bar (mono ascii-style) ---------- */
+
+  .conf-bar {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: -1px;
+  }
+
+  /* ---------- Diff block ---------- */
+
+  .diff-block {
+    background: var(--surface-2);
+    border: 1px solid var(--line-soft);
+    border-radius: 5px;
+    padding: 14px 16px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    overflow-x: auto;
+    white-space: pre-wrap;
+  }
+
+  .diff-add { color: var(--teal); }
+  .diff-del { color: var(--red); }
+  .diff-ctx { color: var(--ink-dim); }
+
+  /* ---------- Sign-off bar ---------- */
+
+  .signoff {
+    background: var(--amber-soft);
+    border: 1px solid rgba(217, 142, 63, 0.35);
+    border-radius: 5px;
+  }
+
+  .btn-approve {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 9px 16px;
+    border-radius: 4px;
+    border: 1px solid var(--teal);
+    color: var(--teal);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .btn-approve:hover:not(:disabled) { background: var(--teal); color: #06201a; }
+
+  .btn-reject {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 9px 16px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .btn-reject:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+
+  .btn-approve:disabled, .btn-reject:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ---------- Section divider ---------- */
+
+  .divider-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-faint);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .divider-label::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line-soft);
+  }
+</style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen">
-  <div id="root"></div>
+<body class="min-h-screen">
+<div id="root"></div>
 
-  <script type="text/babel">
-    const { useState, useEffect } = React;
+<script type="text/babel">
+const { useState, useEffect } = React;
 
-    function App() {
-      const [repoUrl, setRepoUrl] = useState("");
-      const [problem, setProblem] = useState(
-        "Two users can book the same seat simultaneously. Investigate and plan a fix."
-      );
-      const [loading, setLoading] = useState(false);
-      const [investigation, setInvestigation] = useState(null);
-      const [approvalLoading, setApprovalLoading] = useState(false);
-      const [testResult, setTestResult] = useState(null);
-      const [history, setHistory] = useState([]);
+const API_BASE = "http://127.0.0.1:8000";
 
-      const API_BASE = "http://127.0.0.1:8000";
+function Seal() {
+  return (
+    <svg className="seal" viewBox="0 0 40 40" fill="none">
+      <path d="M20 4L34 9V19C34 27.5 28 33.5 20 36C12 33.5 6 27.5 6 19V9L20 4Z"
+        stroke="#d98e3f" strokeWidth="1.4" fill="rgba(217,142,63,0.06)" />
+      <path d="M14 19.5L18 23.5L26 14.5" stroke="#3aab97" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
-      const fetchHistory = async () => {
-        try {
-          const res = await fetch(`${API_BASE}/api/history`);
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.detail || "Failed to load history");
-          setHistory(Array.isArray(data) ? data : data.history || []);
-        } catch (err) {
-          console.error("Failed to load history", err);
-        }
-      };
+function EmptyFolder() {
+  return (
+    <svg className="empty-folder" viewBox="0 0 56 44" fill="none">
+      <path d="M2 10C2 8 3.5 6.5 5.5 6.5H20L24 11H50.5C52.5 11 54 12.5 54 14.5V37.5C54 39.5 52.5 41 50.5 41H5.5C3.5 41 2 39.5 2 37.5V10Z"
+        stroke="#8b93a1" strokeWidth="1.4" strokeDasharray="3 3" />
+    </svg>
+  );
+}
 
-      useEffect(() => {
-        fetchHistory();
-      }, []);
+function confidenceBar(confidence) {
+  const filled = Math.round((confidence || 0) * 12);
+  return "█".repeat(filled) + "░".repeat(12 - filled);
+}
 
-      const handleInvestigate = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setInvestigation(null);
-        setTestResult(null);
+function riskStampClass(risk) {
+  const r = (risk || "").toUpperCase();
+  if (r === "HIGH") return "stamp--red";
+  if (r === "LOW") return "stamp--teal";
+  return "stamp--amber";
+}
 
-        try {
-          const res = await fetch(`${API_BASE}/api/investigate`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ problem, repo_url: repoUrl || null })
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.detail || "Investigation failed");
-          setInvestigation(data);
-        } catch (err) {
-          alert("Error: " + err.message);
-        } finally {
-          setLoading(false);
-        }
-      };
+function renderDiff(fix) {
+  if (!fix) return null;
+  return fix.split("\n").map((line, i) => {
+    let cls = "diff-ctx";
+    if (/^\+(?!\+\+)/.test(line)) cls = "diff-add";
+    else if (/^-(?!--)/.test(line)) cls = "diff-del";
+    return <div key={i} className={cls}>{line || "\u00A0"}</div>;
+  });
+}
 
-      const handleApproval = async (approved) => {
-        if (!investigation) return;
-        setApprovalLoading(true);
+function App() {
+  const [repoUrl, setRepoUrl] = useState("");
+  const [problem, setProblem] = useState(
+    "Two users can book the same seat simultaneously. Investigate and plan a fix."
+  );
+  const [loading, setLoading] = useState(false);
+  const [investigation, setInvestigation] = useState(null);
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [caseNo] = useState(() => String(Math.floor(1000 + Math.random() * 8999)));
 
-        try {
-          const res = await fetch(`${API_BASE}/api/approve`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ session_id: investigation.session_id, approved })
-          });
-          const data = await res.json();
-          setTestResult(data);
-          fetchHistory();
-        } catch (err) {
-          alert("Approval error: " + err.message);
-        } finally {
-          setApprovalLoading(false);
-        }
-      };
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/history`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to load history");
+      setHistory(Array.isArray(data) ? data : data.history || []);
+    } catch (err) {
+      console.error("Failed to load history", err);
+    }
+  };
 
-      return (
-        <div className="max-w-6xl mx-auto px-4 py-8">
-          {/* Header */}
-          <header className="flex items-center justify-between pb-6 border-b border-slate-800 mb-8">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">🛡️</span>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white">
-                  Backend Guardian
-                </h1>
-                <p className="text-sm text-slate-400">
-                  Agentic AI Backend Debugging & Safe Code Repair System
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
-              <span className="text-xs font-mono text-emerald-400">AGENTS ONLINE</span>
-            </div>
-          </header>
+  useEffect(() => { fetchHistory(); }, []);
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column: Problem Input & Controls */}
-            <div className="lg:col-span-1 space-y-6">
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-                <h2 className="text-base font-semibold text-slate-200 mb-4 flex items-center gap-2">
-                  <span>🎯</span> Target Investigation
-                </h2>
-                <form onSubmit={handleInvestigate} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">
-                      GitHub Repo URL <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="https://github.com/owner/repo.git (or type 'local')"
-                      value={repoUrl}
-                      onChange={(e) => setRepoUrl(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-                    />
-                    <span className="text-[11px] text-slate-500">
-                      Enter a public GitHub repository link or type <code>local</code> for the mock repo.
-                    </span>
-                  </div>
+  const handleInvestigate = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setInvestigation(null);
+    setTestResult(null);
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">
-                      Reported Bug Description
-                    </label>
-                    <textarea
-                      rows="4"
-                      value={problem}
-                      onChange={(e) => setProblem(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-                    ></textarea>
-                  </div>
+    try {
+      const res = await fetch(`${API_BASE}/api/investigate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ problem, repo_url: repoUrl || null })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Investigation failed");
+      setInvestigation(data);
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium py-2.5 px-4 rounded-lg transition text-sm flex items-center justify-center gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-                        Investigating Repository...
-                      </>
-                    ) : (
-                      <>
-                        <span>🚀</span> Run Autonomous Investigation
-                      </>
-                    )}
-                  </button>
-                </form>
-              </div>
+  const handleApproval = async (approved) => {
+    if (!investigation) return;
+    setApprovalLoading(true);
 
-              {/* Memory History Card */}
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-                <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-                  <span>🧠</span> Solved History (Memory DB)
-                </h3>
-                {history.length === 0 ? (
-                  <p className="text-xs text-slate-500">No past sessions recorded yet.</p>
-                ) : (
-                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                    {history.map((item) => (
-                      <div
-                        key={item.id}
-                        className="bg-slate-950 border border-slate-800/80 p-2.5 rounded-lg text-xs"
-                      >
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-semibold text-indigo-400">Case #{item.id}</span>
-                          <span className="text-emerald-400 font-mono text-[10px]">
-                            {item.test_status}
-                          </span>
-                        </div>
-                        <p className="text-slate-300 line-clamp-2">{item.problem}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+    try {
+      const res = await fetch(`${API_BASE}/api/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: investigation.session_id, approved })
+      });
+      const data = await res.json();
+      setTestResult(data);
+      fetchHistory();
+    } catch (err) {
+      alert("Approval error: " + err.message);
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
 
-            {/* Right Column: Dynamic Agent Workbench */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Empty State */}
-              {!investigation && !loading && (
-                <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
-                  <span className="text-4xl block mb-3">🔍</span>
-                  <p className="text-sm font-medium">No active debugging session</p>
-                  <p className="text-xs text-slate-600 mt-1">
-                    Enter a problem description and click "Run Autonomous Investigation" to begin.
-                  </p>
-                </div>
-              )}
+  const steps = [
+    { time: "00:00", label: "case intake recorded" },
+    { time: "00:02", label: "memory database queried for prior cases" },
+    { time: "00:05", label: "repository cloned, files & call graph indexed" },
+    { time: "00:11", label: "root cause isolated, patch drafted" },
+  ];
 
-              {/* Live Investigation Loading State */}
-              {loading && (
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <span className="w-5 h-5 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></span>
-                    <h3 className="text-base font-semibold text-white">
-                      Agent Orchestration in Progress
-                    </h3>
-                  </div>
-                  <div className="font-mono text-xs text-slate-400 space-y-1 bg-slate-950 p-4 rounded-lg border border-slate-800">
-                    <p className="text-indigo-400">▶ Step 1: Memory database lookup...</p>
-                    <p className="text-indigo-400">▶ Step 2: Exploring repository files & AST queries...</p>
-                    <p className="text-indigo-400">▶ Step 3: Isolating root cause & drafting atomic patch...</p>
-                  </div>
-                </div>
-              )}
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-8">
 
-              {/* Diagnosis & Approval Card */}
-              {investigation && (
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-5">
-                  <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                    <div>
-                      <span className="text-xs font-mono text-indigo-400 uppercase tracking-wider">
-                        Diagnosis Complete
-                      </span>
-                      <h3 className="text-lg font-bold text-white mt-0.5">
-                        Root Cause & Proposed Remediation
-                      </h3>
-                    </div>
-                    <div className="text-right">
-                      <span className="inline-block bg-red-950 text-red-400 border border-red-800/60 px-2.5 py-0.5 rounded text-xs font-bold font-mono">
-                        RISK: {investigation.risk_level}
-                      </span>
-                      <p className="text-[11px] text-slate-400 mt-1">
-                        Confidence: {(investigation.confidence * 100).toFixed(0)}%
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 text-xs">
-                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
-                      <span className="text-slate-500 block mb-1 font-mono uppercase">
-                        Target File(s)
-                      </span>
-                      <span className="font-mono text-slate-200">
-                        {investigation.affected_files.join(", ")}
-                      </span>
-                    </div>
-                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
-                      <span className="text-slate-500 block mb-1 font-mono uppercase">
-                        Evidence Found
-                      </span>
-                      <span className="text-slate-300 line-clamp-1">
-                        {investigation.evidence}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-xs font-mono text-slate-400 uppercase mb-1">
-                      Root Cause Analysis
-                    </h4>
-                    <p className="text-sm text-slate-300 leading-relaxed bg-slate-950 p-3.5 rounded-lg border border-slate-800">
-                      {investigation.root_cause}
-                    </p>
-                  </div>
-
-                  <div>
-                    <h4 className="text-xs font-mono text-slate-400 uppercase mb-1">
-                      Proposed Fix & Patch Strategy
-                    </h4>
-                    <pre className="text-xs font-mono text-emerald-300 bg-slate-950 p-4 rounded-lg border border-slate-800 overflow-x-auto whitespace-pre-wrap">
-                      {investigation.proposed_fix}
-                    </pre>
-                  </div>
-
-                  {/* Human-in-the-Loop Decision Buttons */}
-                  {!testResult && (
-                    <div className="bg-amber-950/30 border border-amber-800/40 p-4 rounded-xl flex items-center justify-between gap-4">
-                      <div>
-                        <h4 className="text-sm font-semibold text-amber-300 flex items-center gap-1.5">
-                          <span>⚠️</span> Human Approval Required
-                        </h4>
-                        <p className="text-xs text-amber-200/70">
-                          Review the plan above. Modifying database logic requires explicit confirmation.
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleApproval(false)}
-                          disabled={approvalLoading}
-                          className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition"
-                        >
-                          Reject
-                        </button>
-                        <button
-                          onClick={() => handleApproval(true)}
-                          disabled={approvalLoading}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5"
-                        >
-                          {approvalLoading ? "Applying..." : "Approve & Apply"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Automated Test Verification Result */}
-                  {testResult && (
-                    <div className="space-y-3 pt-2">
-                      <div
-                        className={`p-4 rounded-xl border flex items-center justify-between ${
-                          testResult.test_status === "PASSED"
-                            ? "bg-emerald-950/40 border-emerald-800 text-emerald-300"
-                            : testResult.test_status === "SKIPPED"
-                            ? "bg-slate-900 border-slate-700 text-slate-300"
-                            : "bg-red-950/40 border-red-800 text-red-300"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <span className="text-xl">
-                            {testResult.test_status === "PASSED"
-                              ? "✅"
-                              : testResult.test_status === "SKIPPED"
-                              ? "ℹ️"
-                              : "❌"}
-                          </span>
-                          <div>
-                            <h4 className="text-sm font-bold">
-                              Automated Verification: {testResult.test_status}
-                            </h4>
-                            <p className="text-xs opacity-80">
-                              {testResult.test_status === "PASSED"
-                                ? "All tests passed. Patch indexed to memory DB."
-                                : testResult.test_status === "SKIPPED"
-                                ? "No automated test suite detected in repo. Code patch applied directly."
-                                : "Tests failed under load."}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="text-xs font-mono font-bold uppercase px-2.5 py-1 bg-slate-950/60 rounded border border-slate-800">
-                          {testResult.status}
-                        </span>
-                      </div>
-
-                      {testResult.test_output && (
-                        <div>
-                          <span className="text-xs font-mono text-slate-500 block mb-1">
-                            Execution Details:
-                          </span>
-                          <pre className="text-xs font-mono bg-slate-950 p-3.5 rounded-lg border border-slate-800 text-slate-400 whitespace-pre-wrap">
-                            {testResult.test_output}
-                          </pre>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+      <header className="header flex items-center justify-between pb-5 mb-8">
+        <div className="flex items-center gap-3">
+          <Seal />
+          <div>
+            <h1 className="brand-title">Backend Guardian</h1>
+            <p className="brand-sub">Autonomous debugging &amp; supervised repair</p>
           </div>
         </div>
-      );
-    }
+        <div className="flex items-center gap-3">
+          <span className="case-no">CASE No. {caseNo}</span>
+          <div className="radar" title="Agents watching"></div>
+        </div>
+      </header>
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-  </script>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Left: intake + memory */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="panel p-5">
+            <h2 className="panel-title mb-4">Open a case</h2>
+            <form onSubmit={handleInvestigate} className="space-y-5">
+              <div>
+                <label className="field-label">Repository URL</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="https://github.com/owner/repo.git"
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  className="field-input"
+                />
+                <p className="field-hint mt-1.5">Public repo link, or type "local" for the mock repo.</p>
+              </div>
+
+              <div>
+                <label className="field-label">What's going wrong</label>
+                <textarea
+                  rows="4"
+                  value={problem}
+                  onChange={(e) => setProblem(e.target.value)}
+                  className="field-textarea"
+                ></textarea>
+              </div>
+
+              <button type="submit" disabled={loading} className="btn-run">
+                {loading ? (
+                  <>
+                    <span className="spinner"></span>
+                    Investigating…
+                  </>
+                ) : (
+                  "Open case & investigate"
+                )}
+              </button>
+            </form>
+          </div>
+
+          <div className="panel p-5">
+            <h3 className="panel-title mb-3">Prior cases on file</h3>
+            {history.length === 0 ? (
+              <p className="field-hint">Nothing closed yet — solved cases will index here.</p>
+            ) : (
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {history.map((item) => (
+                  <div key={item.id} className="history-card">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="history-tag" style={{ color: "var(--amber)" }}>Case #{item.id}</span>
+                      <span className="history-tag" style={{ color: "var(--teal)" }}>{item.test_status}</span>
+                    </div>
+                    <p className="text-xs text-slate-300" style={{ color: "var(--ink-dim)" }}>
+                      {item.problem}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: case file */}
+        <div className="lg:col-span-2 space-y-6">
+
+          {!investigation && !loading && (
+            <div className="panel p-14 text-center" style={{ borderStyle: "dashed" }}>
+              <EmptyFolder />
+              <p className="field-label" style={{ color: "var(--ink-dim)" }}>No case open</p>
+              <p className="field-hint mt-1">File a report on the left to start an investigation.</p>
+            </div>
+          )}
+
+          {loading && (
+            <div className="panel p-7">
+              <div className="flex items-center gap-3 mb-5">
+                <span className="spinner spinner-light"></span>
+                <h3 className="brand-title" style={{ fontSize: "16px" }}>Agents working the case</h3>
+              </div>
+              <div>
+                {steps.map((s, i) => (
+                  <div className="ledger-item" key={i} style={{ animationDelay: `${i * 0.25}s` }}>
+                    <span className="ledger-time">{s.time}</span>
+                    <span>{s.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {investigation && (
+            <div className="panel p-7 space-y-6">
+
+              <div className="flex items-start justify-between pb-5" style={{ borderBottom: "1px solid var(--line-soft)" }}>
+                <div>
+                  <p className="panel-title mb-1">Diagnosis complete</p>
+                  <h3 className="brand-title" style={{ fontSize: "19px" }}>Root cause &amp; proposed repair</h3>
+                </div>
+                <span className={`stamp ${riskStampClass(investigation.risk_level)}`}>
+                  {investigation.risk_level} risk
+                </span>
+              </div>
+
+              <div className="conf-bar" style={{ color: "var(--ink-dim)" }}>
+                {confidenceBar(investigation.confidence)}
+                <span className="ml-2" style={{ color: "var(--ink)" }}>
+                  {(investigation.confidence * 100).toFixed(0)}% confidence
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="exhibit">
+                  <span className="exhibit-label">Files touched</span>
+                  <span className="font-mono text-xs" style={{ color: "var(--ink)" }}>
+                    {investigation.affected_files.join(", ")}
+                  </span>
+                </div>
+                <div className="exhibit">
+                  <span className="exhibit-label">Evidence found</span>
+                  <span className="text-xs" style={{ color: "var(--ink-dim)" }}>
+                    {investigation.evidence}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <span className="divider-label mb-2">Root cause</span>
+                <p className="exhibit text-sm leading-relaxed" style={{ color: "var(--ink)" }}>
+                  {investigation.root_cause}
+                </p>
+              </div>
+
+              <div>
+                <span className="divider-label mb-2">Proposed patch</span>
+                <div className="diff-block">
+                  {renderDiff(investigation.proposed_fix)}
+                </div>
+              </div>
+
+              {!testResult && (
+                <div className="signoff p-4 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="field-label" style={{ color: "var(--amber)" }}>Sign-off required</p>
+                    <p className="field-hint mt-1">Review the patch above before it touches the database layer.</p>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={() => handleApproval(false)} disabled={approvalLoading} className="btn-reject">
+                      Reject
+                    </button>
+                    <button onClick={() => handleApproval(true)} disabled={approvalLoading} className="btn-approve">
+                      {approvalLoading ? "Applying…" : "Approve & apply"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {testResult && (
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center justify-between p-4 exhibit">
+                    <div className="flex items-center gap-3">
+                      <span className={`stamp ${
+                        testResult.test_status === "PASSED" ? "stamp--teal" :
+                        testResult.test_status === "SKIPPED" ? "stamp--amber" : "stamp--red"
+                      }`}>
+                        {testResult.test_status === "PASSED" ? "Verified" :
+                         testResult.test_status === "SKIPPED" ? "Skipped" : "Failed"}
+                      </span>
+                      <p className="field-hint">
+                        {testResult.test_status === "PASSED"
+                          ? "Tests pass. Patch indexed to the case ledger."
+                          : testResult.test_status === "SKIPPED"
+                          ? "No test suite found — patch applied without automated checks."
+                          : "Tests failed under load."}
+                      </p>
+                    </div>
+                    <span className="history-tag" style={{ color: "var(--ink-faint)" }}>{testResult.status}</span>
+                  </div>
+
+                  {testResult.test_output && (
+                    <div>
+                      <span className="divider-label mb-2">Execution log</span>
+                      <div className="diff-block" style={{ color: "var(--ink-dim)" }}>
+                        {testResult.test_output}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
 </body>
 </html>
