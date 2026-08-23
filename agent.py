@@ -110,7 +110,7 @@ def run_agent(user_problem: str):
     # Step A: Autonomous Investigation Loop
     while True:
         response = client.chat.completions.create(
-            model="qwen/qwen3.6-27b",
+            model="openai/gpt-oss-120b",
             messages=messages,
             tools=tools_schema,
             tool_choice="auto",
