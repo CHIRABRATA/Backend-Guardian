@@ -35,7 +35,8 @@
         try {
           const res = await fetch(`${API_BASE}/api/history`);
           const data = await res.json();
-          if (data.history) setHistory(data.history);
+          if (!res.ok) throw new Error(data.detail || "Failed to load history");
+          setHistory(Array.isArray(data) ? data : data.history || []);
         } catch (err) {
           console.error("Failed to load history", err);
         }
