@@ -99,36 +99,58 @@ def write_file(file_path: str, content: str, base_dir: str = "mock_repo") -> str
     except Exception as e:
         return f"Error writing file: {str(e)}"
 
-def run_tests(test_file: str = "test.js", base_dir: str = "mock_repo") -> dict:
-    target_path = os.path.abspath(os.path.join(base_dir, test_file))
-    command = None
+def run_tests(test_file: str = "test.js", base_dir: str = "workspace_repo") -> dict:
+    cwd = os.path.abspath(base_dir)
     use_shell = platform.system() == "Windows"
+    npm_cmd = "npm.cmd" if use_shell else "npm"
 
-    # 1. Check for standalone test file
+    # 1. Automatically install dependencies when needed
+    package_json_path = os.path.join(cwd, "package.json")
+    node_modules_path = os.path.join(cwd, "node_modules")
+
+    if os.path.isfile(package_json_path) and not os.path.exists(node_modules_path):
+        print("Installing project dependencies (npm install)...")
+        try:
+            subprocess.run(
+                [npm_cmd, "install"],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                shell=use_shell
+            )
+        except Exception as install_err:
+            return {
+                "status": "FAILED",
+                "output": f"Failed during 'npm install': {str(install_err)}"
+            }
+
+    # 2. Determine how to run tests
+    target_path = os.path.join(cwd, test_file)
+    command = None
+
     if os.path.isfile(target_path):
-        command = ["node", target_path]
-    else:
-        # 2. Check for npm test script in package.json
-        package_path = os.path.join(base_dir, "package.json")
-        if os.path.isfile(package_path):
-            try:
-                with open(package_path, "r", encoding="utf-8") as f:
-                    package = json.load(f)
-                if package.get("scripts", {}).get("test"):
-                    command = ["npm.cmd" if use_shell else "npm", "test"]
-            except Exception:
-                pass
+        command = ["node", test_file]
+    elif os.path.isfile(package_json_path):
+        try:
+            with open(package_json_path, "r", encoding="utf-8") as f:
+                package = json.load(f)
+            if package.get("scripts", {}).get("test"):
+                command = [npm_cmd, "test"]
+        except Exception:
+            pass
 
     if command is None:
         return {
             "status": "SKIPPED",
-            "output": f"No test file '{test_file}' or package test script found in '{base_dir}'."
+            "output": f"No test file '{test_file}' or npm test script found in '{base_dir}'."
         }
 
+    # 3. Execute test suite
     try:
         result = subprocess.run(
             command,
-            cwd=os.path.abspath(base_dir),
+            cwd=cwd,
             capture_output=True,
             text=True,
             timeout=15,
@@ -137,7 +159,7 @@ def run_tests(test_file: str = "test.js", base_dir: str = "mock_repo") -> dict:
         output = (result.stdout + "\n" + result.stderr).strip()
         return {
             "status": "PASSED" if result.returncode == 0 else "FAILED",
-            "output": output if output else "Tests completed with return code 0."
+            "output": output if output else "Tests completed successfully."
         }
     except Exception as e:
         return {"status": "FAILED", "output": f"Execution error: {str(e)}"}
