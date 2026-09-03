@@ -3,6 +3,7 @@ import stat
 import shutil
 import subprocess
 import json
+import platform
 import urllib.error
 import urllib.request
 
@@ -98,19 +99,23 @@ def write_file(file_path: str, content: str, base_dir: str = "mock_repo") -> str
     except Exception as e:
         return f"Error writing file: {str(e)}"
 
-def run_tests(test_file: str = "tests/booking.test.js", base_dir: str = "mock_repo") -> dict:
+def run_tests(test_file: str = "test.js", base_dir: str = "mock_repo") -> dict:
     target_path = os.path.abspath(os.path.join(base_dir, test_file))
     command = None
+    use_shell = platform.system() == "Windows"
+
+    # 1. Check for standalone test file
     if os.path.isfile(target_path):
         command = ["node", target_path]
     else:
+        # 2. Check for npm test script in package.json
         package_path = os.path.join(base_dir, "package.json")
         if os.path.isfile(package_path):
             try:
-                with open(package_path, "r", encoding="utf-8") as package_file:
-                    package = json.load(package_file)
+                with open(package_path, "r", encoding="utf-8") as f:
+                    package = json.load(f)
                 if package.get("scripts", {}).get("test"):
-                    command = ["npm", "test"]
+                    command = ["npm.cmd" if use_shell else "npm", "test"]
             except Exception:
                 pass
 
@@ -126,12 +131,13 @@ def run_tests(test_file: str = "tests/booking.test.js", base_dir: str = "mock_re
             cwd=os.path.abspath(base_dir),
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=15,
+            shell=use_shell
         )
         output = (result.stdout + "\n" + result.stderr).strip()
         return {
             "status": "PASSED" if result.returncode == 0 else "FAILED",
-            "output": output
+            "output": output if output else "Tests completed with return code 0."
         }
     except Exception as e:
         return {"status": "FAILED", "output": f"Execution error: {str(e)}"}

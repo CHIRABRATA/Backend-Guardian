@@ -112,29 +112,28 @@ def api_approve(req: ApprovalRequest):
 
     state["approval_status"] = "APPROVED"
 
-    # 1. Apply code fix using the LLM agent
+    # 1. Apply code patch
     patch_result = apply_code_fix_node(state)
     state.update(patch_result)
 
-    # 2. Run automated test suite
-    test_result = run_tests(base_dir=workspace)
+    # 2. Run automated test harness
+    test_result = run_tests(test_file="test.js", base_dir=workspace)
     state["test_status"] = test_result["status"]
     state["test_output"] = test_result["output"]
 
-    # 3. Push to GitHub if remote repository
-    push_result = {"status": "SKIPPED", "message": "Local repository target."}
-    if repo_url != "local":
-        push_result = push_fix_to_github(
-            repo_url=repo_url,
-            base_dir=workspace,
-            branch_name=f"fix/guardian-{req.session_id}",
-            commit_message=f"fix: {state['root_cause'][:60]}",
-            pr_title=f"Fix: {state['root_cause'][:60]}",
-            pr_body=f"### Root Cause\n{state['root_cause']}\n\n### Proposed Strategy\n{state.get('proposed_fix', '')}",
-        )
-
-    # 4. Save to persistent memory
+    # 3. Only push to GitHub if tests passed or were cleanly skipped
+    push_result = {"status": "SKIPPED", "message": "Tests failed; PR blocked."}
     if test_result["status"] in ["PASSED", "SKIPPED"]:
+        if repo_url != "local":
+            push_result = push_fix_to_github(
+                repo_url=repo_url,
+                base_dir=workspace,
+                branch_name=f"fix/guardian-{req.session_id}",
+                commit_message=f"fix: {state['root_cause'][:60]}",
+                pr_title=f"Fix: {state['root_cause'][:60]}",
+                pr_body=f"### Root Cause\n{state['root_cause']}\n\n### Strategy\n{state.get('proposed_fix', '')}"
+            )
+
         save_session_memory(
             user_problem=state["user_problem"],
             affected_files=state["affected_files"],
