@@ -107,10 +107,10 @@ Create a **Static Site** using the same repository with these settings:
 | Setting | Value |
 | --- | --- |
 | Root Directory | `frontend` |
-| Build Command | `sed -i 's|http://127.0.0.1:8000|https://YOUR-BACKEND-URL.onrender.com|g' index.html` |
+| Build Command | `sed -i 's|http://127.0.0.1:8000|https://backend-guardian-6mem.onrender.com|g' index.html` |
 | Publish Directory | `.` |
 
-Replace `https://YOUR-BACKEND-URL.onrender.com` in the build command with the real backend URL before deploying. The build command changes the local fallback URL in the published copy only; it does not modify the GitHub source file.
+The build command changes the local fallback URL in the published copy only; it does not modify the GitHub source file. The current frontend source already uses `https://backend-guardian-6mem.onrender.com` as its production fallback.
 
 After both services deploy, open the frontend URL and use `local` for the repository field to test the included demo repository. Render services may sleep on free plans, so the first request can take longer. Local SQLite history and cloned workspaces are ephemeral on Render.
 
