@@ -1,17 +1,25 @@
 import os
-import subprocess
+import stat
 import shutil
+import subprocess
+import json
+import platform
+import urllib.error
+import urllib.request
+
+def _remove_readonly(func, path, exc_info):
+    """Clear the read-only bit on Windows so files can be deleted."""
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
 
 def clone_github_repo(repo_url: str, target_dir: str = "workspace_repo") -> dict:
-    """
-    Clones a remote GitHub repository into an isolated local workspace folder.
-    Cleans up any existing folder first.
-    """
     safe_target = os.path.abspath(target_dir)
 
-    # Remove previous workspace if it exists
     if os.path.exists(safe_target):
-        shutil.rmtree(safe_target, ignore_errors=True)
+        try:
+            shutil.rmtree(safe_target, onerror=_remove_readonly)
+        except Exception as e:
+            return {"status": "FAILED", "message": f"Could not clear directory: {str(e)}"}
 
     try:
         result = subprocess.run(
@@ -21,16 +29,9 @@ def clone_github_repo(repo_url: str, target_dir: str = "workspace_repo") -> dict
             timeout=30
         )
         if result.returncode == 0:
-            return {
-                "status": "SUCCESS",
-                "workspace_path": target_dir,
-                "message": f"Successfully cloned {repo_url} into {target_dir}"
-            }
+            return {"status": "SUCCESS", "workspace_path": target_dir}
         else:
-            return {
-                "status": "FAILED",
-                "message": f"Git clone failed: {result.stderr.strip()}"
-            }
+            return {"status": "FAILED", "message": f"Git clone failed: {result.stderr.strip()}"}
     except Exception as e:
         return {"status": "FAILED", "message": f"Error running git clone: {str(e)}"}
 
@@ -47,13 +48,12 @@ def list_files(base_dir: str = "mock_repo") -> list[str]:
             file_list.append(rel_path)
     return sorted(file_list)
 
-
 def read_file(file_path: str, base_dir: str = "mock_repo") -> str:
     target_path = os.path.abspath(os.path.join(base_dir, file_path))
     safe_base = os.path.abspath(base_dir)
 
     if not target_path.startswith(safe_base):
-        return f"Error: Access denied. Cannot read files outside '{base_dir}'."
+        return f"Error: Access denied outside '{base_dir}'."
 
     if not os.path.exists(target_path):
         return f"Error: File '{file_path}' not found."
@@ -63,7 +63,6 @@ def read_file(file_path: str, base_dir: str = "mock_repo") -> str:
             return f.read()
     except Exception as e:
         return f"Error reading file: {str(e)}"
-
 
 def search_code(query: str, base_dir: str = "mock_repo") -> list[dict]:
     results = []
@@ -85,13 +84,12 @@ def search_code(query: str, base_dir: str = "mock_repo") -> list[dict]:
             continue
     return results
 
-
 def write_file(file_path: str, content: str, base_dir: str = "mock_repo") -> str:
     target_path = os.path.abspath(os.path.join(base_dir, file_path))
     safe_base = os.path.abspath(base_dir)
 
     if not target_path.startswith(safe_base):
-        return f"Error: Access denied. Cannot write files outside '{base_dir}'."
+        return f"Error: Access denied outside '{base_dir}'."
 
     try:
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
@@ -101,23 +99,145 @@ def write_file(file_path: str, content: str, base_dir: str = "mock_repo") -> str
     except Exception as e:
         return f"Error writing file: {str(e)}"
 
+def run_tests(test_file: str = "test.js", base_dir: str = "workspace_repo") -> dict:
+    cwd = os.path.abspath(base_dir)
+    use_shell = platform.system() == "Windows"
+    npm_cmd = "npm.cmd" if use_shell else "npm"
 
-def run_tests(test_file: str = "tests/booking.test.js", base_dir: str = "mock_repo") -> dict:
-    target_path = os.path.abspath(os.path.join(base_dir, test_file))
-    if not os.path.exists(target_path):
-        return {"status": "FAILED", "output": f"Error: Test file '{test_file}' not found."}
+    # 1. Automatically install dependencies when needed
+    package_json_path = os.path.join(cwd, "package.json")
+    node_modules_path = os.path.join(cwd, "node_modules")
 
+    if os.path.isfile(package_json_path) and not os.path.exists(node_modules_path):
+        print("Installing project dependencies (npm install)...")
+        try:
+            subprocess.run(
+                [npm_cmd, "install"],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                shell=use_shell
+            )
+        except Exception as install_err:
+            return {
+                "status": "FAILED",
+                "output": f"Failed during 'npm install': {str(install_err)}"
+            }
+
+    # 2. Determine how to run tests
+    target_path = os.path.join(cwd, test_file)
+    command = None
+
+    if os.path.isfile(target_path):
+        command = ["node", test_file]
+    elif os.path.isfile(package_json_path):
+        try:
+            with open(package_json_path, "r", encoding="utf-8") as f:
+                package = json.load(f)
+            if package.get("scripts", {}).get("test"):
+                command = [npm_cmd, "test"]
+        except Exception:
+            pass
+
+    if command is None:
+        return {
+            "status": "SKIPPED",
+            "output": f"No test file '{test_file}' or npm test script found in '{base_dir}'."
+        }
+
+    # 3. Execute test suite
     try:
         result = subprocess.run(
-            ["node", target_path],
+            command,
+            cwd=cwd,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=15,
+            shell=use_shell
         )
         output = (result.stdout + "\n" + result.stderr).strip()
         return {
             "status": "PASSED" if result.returncode == 0 else "FAILED",
-            "output": output
+            "output": output if output else "Tests completed successfully."
         }
     except Exception as e:
         return {"status": "FAILED", "output": f"Execution error: {str(e)}"}
+
+def push_fix_to_github(
+    repo_url: str,
+    base_dir: str = "workspace_repo",
+    branch_name: str = "fix/backend-guardian-patch",
+    commit_message: str = "fix: autonomous bug remediation by Backend Guardian",
+    pr_title: str = "fix: autonomous bug remediation by Backend Guardian",
+    pr_body: str = "Automated bug patch generated and verified by Backend Guardian."
+) -> dict:
+    """Push a fix branch and open a GitHub pull request when authenticated."""
+    token = os.getenv("GITHUB_TOKEN")
+    cwd = os.path.abspath(base_dir)
+
+    try:
+        clean_url = repo_url.strip()
+        for prefix in ("https://github.com/", "http://github.com/", "git@github.com:"):
+            if clean_url.startswith(prefix):
+                clean_url = clean_url[len(prefix):]
+                break
+        clean_url = clean_url.removesuffix(".git").strip("/")
+        parts = clean_url.split("/")
+        if len(parts) < 2:
+            return {"status": "FAILED", "message": f"Could not parse owner/repo from URL: {repo_url}"}
+        owner, repo = parts[0], parts[1]
+
+        subprocess.run(["git", "config", "user.name", "Backend-Guardian-Agent"], cwd=cwd, check=True)
+        subprocess.run(["git", "config", "user.email", "agent@backend-guardian.ai"], cwd=cwd, check=True)
+        subprocess.run(["git", "checkout", "-B", branch_name], cwd=cwd, check=True)
+        subprocess.run(["git", "add", "."], cwd=cwd, check=True)
+        commit_res = subprocess.run(
+            ["git", "commit", "-m", commit_message],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+        )
+        if commit_res.returncode != 0 and "nothing to commit" not in (commit_res.stdout + commit_res.stderr).lower():
+            return {"status": "FAILED", "message": f"Git commit failed: {commit_res.stderr.strip()}"}
+
+        auth_url = f"https://{token}@github.com/{owner}/{repo}.git" if token else repo_url
+
+        push_res = subprocess.run(
+            ["git", "push", "-u", auth_url, branch_name, "--force"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if push_res.returncode == 0:
+            if not token:
+                return {"status": "SUCCESS", "branch": branch_name, "message": f"Branch '{branch_name}' pushed, but no GITHUB_TOKEN was provided to open a PR."}
+
+            api_url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+            payload = json.dumps({"title": pr_title, "body": pr_body, "head": branch_name, "base": "main"}).encode("utf-8")
+            request = urllib.request.Request(
+                api_url,
+                data=payload,
+                headers={
+                    "Authorization": f"token {token}",
+                    "Accept": "application/vnd.github.v3+json",
+                    "User-Agent": "Backend-Guardian",
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    data = json.loads(response.read().decode())
+                pr_url = data.get("html_url", "")
+                return {"status": "SUCCESS", "branch": branch_name, "pr_url": pr_url, "message": f"Pull Request opened: {pr_url}"}
+            except urllib.error.HTTPError as error:
+                error_body = error.read().decode()
+                if "A pull request already exists" in error_body:
+                    return {"status": "SUCCESS", "branch": branch_name, "message": f"Branch updated on GitHub (PR already open for '{branch_name}')."}
+                return {"status": "WARNING", "branch": branch_name, "message": f"Pushed branch successfully, but failed to open PR: {error_body}"}
+
+        return {"status": "FAILED", "message": f"Git push failed: {push_res.stderr.strip()}"}
+    except Exception as e:
+        return {"status": "FAILED", "message": f"Error executing git push: {str(e)}"}
