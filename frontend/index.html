@@ -469,9 +469,7 @@ function renderDiff(fix) {
 
 function App() {
   const [repoUrl, setRepoUrl] = useState("");
-  const [problem, setProblem] = useState(
-    "Two users can book the same seat simultaneously. Investigate and plan a fix."
-  );
+  const [problem, setProblem] = useState("");
   const [loading, setLoading] = useState(false);
   const [investigation, setInvestigation] = useState(null);
   const [approvalLoading, setApprovalLoading] = useState(false);
