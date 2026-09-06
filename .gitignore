@@ -217,3 +217,17 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 backend_guardian_memory.db
+workspace/
+workspace_repo
+
+# Backend Guardian local runtime files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+node_modules/
+
+# Local editor and operating-system files
+.vscode/
+.DS_Store
+Thumbs.db
